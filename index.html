@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>纯音测听虚拟实训平台</title>
+    <!-- 引用外部CSS -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🎧 纯音测听虚拟实训平台</h1>
+        <div class="user-info">
+            <label>
+                受试者姓名：<input type="text" id="userName" placeholder="请输入姓名">
+            </label>
+            <label>
+                性别：<select id="userGender">
+                    <option value="男">男</option>
+                    <option value="女">女</option>
+                </select>
+            </label>
+            <label>
+                年龄：<input type="number" id="userAge" placeholder="请输入年龄" min="1" max="120">
+            </label>
+            <label>
+                测试人员：<input type="text" id="testerName" placeholder="请输入测试员姓名">
+            </label>
+        </div>
+        <div class="selector-group">
+            <div class="selector-item">
+                <label>测试类型：</label>
+                <select class="test-select" onchange="setTestType(this.value)">
+                    <option value="air" selected>气导测试</option>
+                    <option value="bone">骨导测试</option>
+                </select>
+            </div>
+            <div class="selector-item">
+                <label>测试耳：</label>
+                <select class="test-select" onchange="setEar(this.value)">
+                    <option value="right" selected>右耳测试</option>
+                    <option value="left">左耳测试</option>
+                </select>
+            </div>
+        </div>
+        <div class="main-content">
+            <div class="audiogram-container">
+                <div class="audiogram-title">听力图 (Audiogram)</div>
+                <canvas id="audiogram"></canvas>
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="symbol-circle"></div>
+                        <span>右耳气导 (AC)</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="symbol-less">&lt;</span>
+                        <span>右耳骨导 (BC)</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="symbol-x">✕</span>
+                        <span>左耳气导 (AC)</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="symbol-greater">&gt;</span>
+                        <span>左耳骨导 (BC)</span>
+                    </div>
+                </div>
+                <div class="test-sequence">
+                    <h4>📋 测试顺序</h4>
+                    <div class="sequence-list" id="sequenceList"></div>
+                </div>
+                <div class="instructions">
+                    <h4>📖 测试说明</h4>
+                    <ol>
+                        <li>输入受试者姓名，选择测试类型（气导/骨导）和测试耳（左/右）</li>
+                        <li>按WHO标准测试顺序进行：1000Hz → 2000Hz → 4000Hz → 8000Hz → 复测1000Hz → 500Hz → 250Hz → 125Hz</li>
+                        <li>使用"频率调节"按钮切换测试频率（气导：125-8000Hz，骨导：250-4000Hz）</li>
+                        <li>初始给声强度为40dB HL，使用"强度调节"按钮调整（-10dB或+5dB）</li>
+                        <li>点击"给声"按钮播放纯音，受试者根据是否听到选择"能听到"或"听不到"</li>
+                        <li>系统根据响应自动确定该频率的听阈，并在听力图上标记</li>
+                        <li>所有频率测试完成后，系统自动计算平均听力损失</li>
+                    </ol>
+                </div>
+                <div class="results-summary" id="resultsSummary" style="display: none;">
+                    <h3>📊 测试结果汇总</h3>
+                    <button class="export-btn" onclick="exportToWord()" style="float: right; margin-bottom: 15px; padding: 10px 20px; background: #27ae60; color: white; border: none; border-radius: 8px; cursor: pointer;">📄 导出Word报告</button>
+                    <div style="clear: both;"></div>
+                    
+                    <!-- 手动输入区域 -->
+                    <div class="manual-input-section" style="background: #f9f9f9; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+                        <h4 style="color: #3498db; margin-bottom: 15px;">✏️ 手动输入结果分析（可选）</h4>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+                            <div>
+                                <label>右耳气导听阈 (dB HL):</label>
+                                <input type="number" id="manualRightAC" placeholder="" style="width: 100px; padding: 5px; margin-left: 10px;">
+                            </div>
+                            <div>
+                                <label>左耳气导听阈 (dB HL):</label>
+                                <input type="number" id="manualLeftAC" placeholder="" style="width: 100px; padding: 5px; margin-left: 10px;">
+                            </div>
+                            <div>
+                                <label>右耳骨导听阈 (dB HL):</label>
+                                <input type="number" id="manualRightBC" placeholder="" style="width: 100px; padding: 5px; margin-left: 10px;">
+                            </div>
+                            <div>
+                                <label>左耳骨导听阈 (dB HL):</label>
+                                <input type="number" id="manualLeftBC" placeholder="" style="width: 100px; padding: 5px; margin-left: 10px;">
+                            </div>
+                            <div style="grid-column: span 2;">
+                                <label>听力损失程度:</label>
+                                <select id="manualDegree" style="padding: 5px; margin-left: 10px;">
+                                    <option value="">请选择</option>
+                                    <option value="正常">正常</option>
+                                    <option value="轻度">轻度</option>
+                                    <option value="中度">中度</option>
+                                    <option value="中重度">中重度</option>
+                                    <option value="重度">重度</option>
+                                    <option value="极重度/完全聋">极重度/完全聋</option>
+                                </select>
+                            </div>
+                            <div style="grid-column: span 2;">
+                                <label>听力损失性质:</label>
+                                <select id="lossType" style="padding: 5px; margin-left: 10px;">
+                                    <option value="">请选择</option>
+                                    <option value="传导性聋">传导性聋</option>
+                                    <option value="感音神经性聋">感音神经性聋</option>
+                                    <option value="混合性聋">混合性聋</option>
+                                    <option value="正常听力">正常听力</option>
+                                </select>
+                            </div>
+                            <div style="grid-column: span 2;">
+                                <label>建议:</label>
+                                <textarea id="suggestions" rows="3" cols="60" placeholder="请输入建议..." style="padding: 10px; margin-left: 10px; width: calc(100% - 60px);"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="controls-panel">
+                <div class="current-values">
+                    <h3>当前设置</h3>
+                    <div class="value-label">频率 (Hz)</div>
+                    <div class="value-display" id="currentFrequency">1000</div>
+                    <div class="value-label">强度 (dB HL)</div>
+                    <div class="value-display" id="currentLevel">40</div>
+                </div>
+                <div class="control-buttons">
+                    <div class="frequency-controls">
+                        <div class="control-label">频率调节</div>
+                        <div class="btn-group">
+                            <button class="btn-minus" onclick="adjustFrequency(-1)">- 减</button>
+                            <button class="btn-plus" onclick="adjustFrequency(1)">+ 增</button>
+                        </div>
+                    </div>
+                    <div class="level-controls">
+                        <div class="control-label">强度调节</div>
+                        <div class="btn-group">
+                            <button class="btn-minus" onclick="adjustLevel(-10)">-10</button>
+                            <button class="btn-plus" onclick="adjustLevel(5)">+5</button>
+                        </div>
+                    </div>
+                </div>
+                <button class="stimulus-btn" onclick="presentStimulus()">🔊 给声</button>
+                <div class="response-buttons">
+                    <button class="response-btn btn-confirm" onclick="confirmThreshold()" style="grid-column: span 2; background: #667eea; color: white;">✓ 确定听阈</button>
+                    <button class="response-btn btn-reset" onclick="resetResults()" style="grid-column: span 2; background: #95a5a6; color: white;">🔄 重置测试</button>
+                </div>
+                <div class="status-panel">
+                    <h4>测试状态</h4>
+                    <div class="status-item">
+                        <span>当前测试类型：</span>
+                        <span id="statusTestType">气导</span>
+                    </div>
+                    <div class="status-item">
+                        <span>当前测试耳：</span>
+                        <span id="statusEar">右耳</span>
+                    </div>
+                    <div class="status-item">
+                        <span>已测试点数：</span>
+                        <span id="statusTested">0</span>
+                    </div>
+                    <div class="status-item">
+                        <span>当前频率：</span>
+                        <span id="statusFrequency">1000 Hz</span>
+                    </div>
+                    <div class="status-item">
+                        <span>当前强度：</span>
+                        <span id="statusLevel">40 dB HL</span>
+                    </div>
+                </div>
+                <div class="tips-panel" id="tipsPanel">
+                    <div class="tips-header">
+                        <span class="tips-icon">💡</span>
+                        <span>操作提示</span>
+                    </div>
+                    <div id="flowTip" class="tip-item flow-tip">
+                        <strong>📋 流程引导：</strong>请按顺序完成测试耳选择→频率选择→强度调节→纯音播放→应答判断→听阈记录
+                    </div>
+                    <div id="errorTip" class="tip-item error-tip">
+                        <strong>⚠️ 防错提示：</strong><span id="errorTipContent"></span>
+                    </div>
+                    <div id="statusTip" class="tip-item status-tip">
+                        <strong>📢 状态反馈：</strong><span id="statusTipContent"></span>
+                    </div>
+                    <div id="calcTip" class="tip-item calc-tip">
+                        <strong>📊 听阈计算：</strong>请根据500Hz、1000Hz、2000Hz、4000Hz处的气导听阈值计算左右耳平均听阈
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 引用外部JS -->
+    <script src="js/main.js"></script>
+</body>
+</html>
