@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>考试模块 - 纯音测听虚拟实训平台</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Three.js 3D库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- GLB模型加载器 - 使用本地文件 -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <!-- 患者3D模块 -->
+    <script src="js/patient3D.js"></script>
+    <!-- jsPDF库用于生成PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+    <div class="container exam-container">
+        <div class="header-bar">
+            <h1>📝 考试模块</h1>
+            <button class="back-btn" onclick="window.location.href='index.html'">🏠 返回首页</button>
+        </div>
+        
+        <div class="user-info">
+            <label>受试者姓名：<input type="text" id="userName" placeholder="请输入姓名"></label>
+            <label>性别：<select id="userGender"><option value="男">男</option><option value="女">女</option></select></label>
+            <label>年龄：<input type="number" id="userAge" placeholder="请输入年龄" min="1" max="120"></label>
+            <label>测试人员：<input type="text" id="testerName" placeholder="请输入测试员姓名"></label>
+        </div>
+        
+        <div class="selector-group">
+            <div id="caseInfo"></div>
+
+            <div class="selector-item">
+                <label>测试类型：</label>
+                <select class="test-select" onchange="setTestType(this.value)">
+                    <option value="air" selected>气导测试</option>
+                    <option value="bone">骨导测试</option>
+                </select>
+            </div>
+            <div class="selector-item">
+                <label>测试耳：</label>
+                <select class="test-select" onchange="setEar(this.value)">
+                    <option value="right" selected>右耳测试</option>
+                    <option value="left">左耳测试</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="exam-layout">
+            <!-- 上部区域：虚拟患者和听力图并排 -->
+            <div class="exam-top-row">
+                <!-- 虚拟患者区域 (400px) -->
+                <div class="patient-panel">
+                    <h4>🤖 虚拟患者</h4>
+                    <div id="patient3DContainer"></div>
+                    <div class="patient-status">
+                        <div class="status-text" id="patientStatus"></div>
+                    </div>
+                </div>
+                
+                <!-- 听力图区域 (剩余空间) -->
+                <div class="audiogram-container">
+                    <div class="audiogram-title">听力图 (Audiogram)</div>
+                    <canvas id="audiogram"></canvas>
+                    <div class="legend">
+                        <div class="legend-item"><div class="symbol-circle"></div><span>右耳气导 (AC)</span></div>
+                        <div class="legend-item"><span class="symbol-less">&lt;</span><span>右耳骨导 (BC)</span></div>
+                        <div class="legend-item"><span class="symbol-x">✕</span><span>左耳气导 (AC)</span></div>
+                        <div class="legend-item"><span class="symbol-greater">&gt;</span><span>左耳骨导 (BC)</span></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 下部区域：控制面板 -->
+            <div class="exam-bottom-area">
+                <!-- 控制栏：当前设置 | 频率/强度调节 | 给声按钮 | 测试状态 -->
+                <div class="exam-controls-row">
+                    <!-- 当前设置 -->
+                    <div class="control-item current-settings">
+                        <h4>当前设置</h4>
+                        <div class="setting-row">
+                            <div class="setting-item">
+                                <div class="setting-label">频率</div>
+                                <div class="setting-value" id="currentFrequency">1000</div>
+                                <div class="setting-unit">Hz</div>
+                            </div>
+                            <div class="setting-item">
+                                <div class="setting-label">强度</div>
+                                <div class="setting-value level" id="currentLevel">40</div>
+                                <div class="setting-unit">dB HL</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 频率/强度调节 -->
+                    <div class="control-item adjust-controls">
+                        <h4>频率/强度调节</h4>
+                        <div class="adjust-row">
+                            <div class="adjust-item">
+                                <div class="adjust-label">频率</div>
+                                <div class="btn-group">
+                                    <button class="btn-minus" onclick="adjustFrequency(-1)">-</button>
+                                    <button class="btn-plus" onclick="adjustFrequency(1)">+</button>
+                                </div>
+                            </div>
+                            <div class="adjust-item">
+                                <div class="adjust-label">强度</div>
+                                <div class="btn-group">
+                                    <button class="btn-minus" onclick="adjustLevel(-10)">-10</button>
+                                    <button class="btn-plus" onclick="adjustLevel(5)">+5</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 给声按钮 -->
+                    <div class="control-item stimulus-area">
+                        <button class="stimulus-btn" onclick="presentStimulus()">🔊 给声</button>
+                    </div>
+                    
+                    <!-- 测试状态 -->
+                    <div class="control-item status-area">
+                        <h4>测试状态</h4>
+                        <div class="status-item"><span>类型：</span><span id="statusTestType">气导</span></div>
+                        <div class="status-item"><span>测试耳：</span><span id="statusEar">右耳</span></div>
+                        <div class="status-item"><span>已测：</span><span id="statusTested">0</span></div>
+                    </div>
+                </div>
+                
+                <!-- 确定听阈按钮（全宽） -->
+                <div class="confirm-row">
+                    <button class="confirm-threshold-btn" onclick="confirmThreshold()">✓ 确定听阈</button>
+                </div>
+                
+                <!-- 测试结果填写区域 -->
+                <div class="results-summary" id="resultsSummary">
+                    <h3>📊 测试结果分析</h3>
+                    <div class="manual-input-section">
+                        <div class="input-grid">
+                            <div><label>右耳气导听阈 (dB HL):</label><input type="number" id="manualRightAC" placeholder=""></div>
+                            <div><label>左耳气导听阈 (dB HL):</label><input type="number" id="manualLeftAC" placeholder=""></div>
+                            <div><label>右耳骨导听阈 (dB HL):</label><input type="number" id="manualRightBC" placeholder=""></div>
+                            <div><label>左耳骨导听阈 (dB HL):</label><input type="number" id="manualLeftBC" placeholder=""></div>
+                            <div style="grid-column: span 2;"><label>听力损失程度:</label><select id="manualDegree"><option value="">请选择</option><option value="正常听力">正常听力</option><option value="轻度">轻度</option><option value="中度">中度</option><option value="中重度">中重度</option><option value="重度">重度</option><option value="极重度">极重度</option></select></div>
+                            <div style="grid-column: span 2;"><label>听力损失性质:</label><select id="lossType"><option value="">请选择</option><option value="正常听力">正常听力</option><option value="传导性聋">传导性聋</option><option value="感音神经性聋">感音神经性聋</option><option value="混合性聋">混合性聋</option></select></div>
+                            <div style="grid-column: span 2;"><label>建议:</label><textarea id="suggestions" placeholder="请输入建议..."></textarea></div>
+                        </div>
+                        
+                        <!-- AI评分区域 -->
+                        <div class="ai-score-section">
+                            <h4>🤖 AI智能评分</h4>
+                            <div class="ai-score-buttons">
+                                <button class="btn-score" onclick="calculateAIScore()">📝 开始评分</button>
+                                <button class="btn-export" onclick="exportToPDF()">📄 导出PDF报告</button>
+                            </div>
+                            
+                            <div id="aiScoreResult">
+                                <!-- 总分显示 -->
+                                <div class="score-overview">
+                                    <div class="score-label">本次考试得分</div>
+                                    <div class="score-value"><span id="totalScore">0</span> / 100</div>
+                                    <div class="score-level"><span id="scoreLevel">未评级</span></div>
+                                </div>
+                                
+                                <!-- 各维度评分详情 -->
+                                <div class="score-details-grid">
+                                    <div class="score-info-card">
+                                        <h5>📋 评分详情</h5>
+                                        <div id="scoreDetails"></div>
+                                    </div>
+                                    <div class="suggestion-card">
+                                        <h5>💡 改进建议</h5>
+                                        <div id="suggestionList"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <script src="js/main.js"></script>
+    <script>
+        // 初始化3D患者
+        let patient3D;
+        
+        // 等待所有脚本加载完成后再执行
+        window.addEventListener('load', () => {
+            console.log('页面加载完成，开始初始化3D患者');
+            console.log('GLTFLoader是否可用:', typeof THREE.GLTFLoader !== 'undefined');
+            
+            // 尝试加载GLB模型，如果失败则使用默认代码生成的模型
+            patient3D = new Patient3D('patient3DContainer', 'models/patient.glb');
+            
+            // 将3D患者实例注册到全局，供main.js使用
+            if (window.setPatient3D) {
+                window.setPatient3D(patient3D);
+            }
+            
+            // 扩展给声函数，添加智能听力响应
+            // 患者反应处理 - 当患者听到声音时，只做左右移动
+            window.handlePatientResponse = function(heard) {
+                if (heard && patient3D) {
+                    const currentEar = document.getElementById('statusEar').textContent;
+                    const ear = currentEar === '右耳' ? 'right' : 'left';
+                    // 只调用左右移动，不举手点头
+                    patient3D.reactToSound(ear);
+                }
+            };
+        });
+        
+        // 更新患者状态显示
+        function updatePatientStatus(status) {
+            const patientStatus = document.getElementById('patientStatus');
+            if (patientStatus) {
+                patientStatus.textContent = status;
+            }
+        }
+        
+        // AI评分函数
+        function calculateAIScore() {
+            const scores = {
+                infoFill: scoreInfoFill(),      // 基础信息填写 10%
+                paramSetup: scoreParamSetup(),   // 测试参数设置 20%
+                testFlow: scoreTestFlow(),       // 测试流程执行 30%
+                dataCalc: scoreDataCalc(),       // 听阈数据记录与计算 20%
+                resultAnalysis: scoreResultAnalysis(), // 结果分析与报告导出 15%
+                errorPrevention: scoreErrorPrevention() // 防错与规范操作 5%
+            };
+            
+            // 计算总分
+            const totalScore = Math.round(
+                scores.infoFill * 0.1 +
+                scores.paramSetup * 0.2 +
+                scores.testFlow * 0.3 +
+                scores.dataCalc * 0.2 +
+                scores.resultAnalysis * 0.15 +
+                scores.errorPrevention * 0.05
+            );
+            
+            // 显示评分结果
+            displayScoreResult(scores, totalScore);
+        }
+        
+        // 基础信息填写评分（10%）
+        function scoreInfoFill() {
+            let score = 0;
+            const fields = [
+                document.getElementById('userName').value,
+                document.getElementById('userGender').value,
+                document.getElementById('userAge').value,
+                document.getElementById('testerName').value
+            ];
+            const filledCount = fields.filter(f => f && f.trim()).length;
+            
+            if (filledCount === 4) score = 100;
+            else if (filledCount === 3) score = 75;
+            else if (filledCount === 2) score = 50;
+            else if (filledCount === 1) score = 25;
+            else score = 0;
+            
+            return score;
+        }
+        
+        // 测试参数设置评分（20%）
+        function scoreParamSetup() {
+            let score = 0;
+            let points = 0;
+            
+            // 检查测试类型和测试耳是否正确选择（使用class选择器）
+            const testSelects = document.querySelectorAll('.test-select');
+            if (testSelects.length >= 2) {
+                if (testSelects[0] && testSelects[0].value) points++;
+                if (testSelects[1] && testSelects[1].value) points++;
+            }
+            
+            // 检查是否进行了频率和强度调节
+            const testedCount = parseInt(document.getElementById('statusTested').textContent) || 0;
+            if (testedCount >= 2) points++;
+            if (testedCount >= 5) points++;
+            
+            score = Math.round((points / 4) * 100);
+            return score;
+        }
+        
+        // 测试流程执行评分（30%）
+        function scoreTestFlow() {
+            let score = 0;
+            const testedCount = parseInt(document.getElementById('statusTested').textContent) || 0;
+            
+            // 根据测试点数评分
+            if (testedCount >= 14) score = 100;  // 双耳气导完整测试
+            else if (testedCount >= 12) score = 85;
+            else if (testedCount >= 10) score = 70;
+            else if (testedCount >= 8) score = 55;
+            else if (testedCount >= 5) score = 40;
+            else if (testedCount >= 2) score = 25;
+            else score = 0;
+            
+            return score;
+        }
+        
+        // 听阈数据记录与计算评分（20%）
+        function scoreDataCalc() {
+            let score = 0;
+            let points = 0;
+            
+            // 检查听阈数据是否填写
+            const acFields = [
+                document.getElementById('manualRightAC').value,
+                document.getElementById('manualLeftAC').value,
+                document.getElementById('manualRightBC').value,
+                document.getElementById('manualLeftBC').value
+            ];
+            const filledCount = acFields.filter(f => f && !isNaN(parseInt(f))).length;
+            
+            if (filledCount >= 4) points += 2;
+            else if (filledCount >= 2) points += 1;
+            
+            // 检查数值范围是否合理（0-120 dB）
+            const validCount = acFields.filter(f => {
+                if (!f) return false;
+                const val = parseInt(f);
+                return val >= 0 && val <= 120;
+            }).length;
+            
+            if (validCount >= 4) points += 2;
+            else if (validCount >= 2) points += 1;
+            
+            score = Math.round((points / 4) * 100);
+            return score;
+        }
+        
+        // 结果分析与报告导出评分（15%）
+        function scoreResultAnalysis() {
+            let score = 0;
+            let points = 0;
+            
+            // 检查听力损失程度是否选择
+            if (document.getElementById('manualDegree').value) points++;
+            
+            // 检查听力损失性质是否选择
+            if (document.getElementById('lossType').value) points++;
+            
+            // 检查建议是否填写
+            const suggestions = document.getElementById('suggestions').value;
+            if (suggestions && suggestions.trim().length >= 10) points++;
+            
+            score = Math.round((points / 3) * 100);
+            return score;
+        }
+        
+        // 防错与规范操作评分（5%）
+        function scoreErrorPrevention() {
+            // 根据测试过程中的错误次数评分
+            // 这里简化处理，默认满分，实际项目中会记录错误次数
+            return 100;
+        }
+        
+        // 显示评分结果
+        function displayScoreResult(scores, totalScore) {
+            // 设置总分
+            document.getElementById('totalScore').textContent = totalScore;
+            
+            // 设置评级
+            let level = '未评级';
+            if (totalScore >= 90) level = '🏆 优秀';
+            else if (totalScore >= 80) level = '👍 良好';
+            else if (totalScore >= 70) level = '😊 中等';
+            else if (totalScore >= 60) level = '💪 及格';
+            else level = '📚 需要改进';
+            document.getElementById('scoreLevel').textContent = level;
+            
+            // 设置评分详情
+            const details = `
+                <p><strong>基础信息填写:</strong> ${scores.infoFill}分 (10%)</p>
+                <p><strong>测试参数设置:</strong> ${scores.paramSetup}分 (20%)</p>
+                <p><strong>测试流程执行:</strong> ${scores.testFlow}分 (30%)</p>
+                <p><strong>听阈数据计算:</strong> ${scores.dataCalc}分 (20%)</p>
+                <p><strong>结果分析报告:</strong> ${scores.resultAnalysis}分 (15%)</p>
+                <p><strong>防错规范操作:</strong> ${scores.errorPrevention}分 (5%)</p>
+            `;
+            document.getElementById('scoreDetails').innerHTML = details;
+            
+            // 设置改进建议
+            const suggestions = generateSuggestions(scores, totalScore);
+            document.getElementById('suggestionList').innerHTML = suggestions;
+            
+            // 显示评分结果
+            document.getElementById('aiScoreResult').classList.add('show');
+        }
+        
+        // 生成改进建议
+        function generateSuggestions(scores, totalScore) {
+            let suggestions = [];
+            
+            if (scores.infoFill < 100) suggestions.push('• 请确保填写完整的受试者信息和测试人员信息');
+            if (scores.paramSetup < 100) suggestions.push('• 注意正确设置测试类型和测试耳，多进行频率和强度调节练习');
+            if (scores.testFlow < 100) suggestions.push('• 建议完成完整的测试流程，至少测试5个以上的频率点');
+            if (scores.dataCalc < 100) suggestions.push('• 确保准确记录听阈数据，数值应在0-120 dB范围内');
+            if (scores.resultAnalysis < 100) suggestions.push('• 认真分析测试结果，正确判断听力损失程度和性质');
+            
+            if (totalScore >= 90) suggestions = ['• 表现优秀！继续保持！', '• 可以尝试更复杂的测试案例挑战自己'];
+            else if (totalScore >= 80) suggestions = ['• 表现良好，继续努力！', '• 注意细节可以进一步提升分数'];
+            else if (totalScore >= 70) suggestions = ['• 还不错，继续练习会更好', '• 重点关注得分较低的项目'];
+            
+            return suggestions.join('<br>');
+        }
+        
+        // 加载中文字体
+        async function loadChineseFont(pdf) {
+            // 使用在线字体或Base64编码的字体
+            // 这里使用一种简单的方法：通过canvas绘制文字然后转换为图片
+            // 但更好的方法是添加字体文件
+            
+            // 检查字体是否已注册
+            if (!pdf.getFontList().includes('NotoSansSC')) {
+                // 由于jsPDF默认不支持中文，我们使用一个简单的解决方案
+                // 创建一个canvas来渲染中文文字
+                console.log('Loading Chinese font...');
+            }
+        }
+        
+        // PDF导出函数
+        function exportToPDF() {
+            try {
+                // 检查依赖是否加载
+                if (typeof html2canvas === 'undefined') {
+                    alert('html2canvas库未加载');
+                    return;
+                }
+                if (typeof window.jspdf === 'undefined' && typeof window.jsPDF === 'undefined') {
+                    alert('jsPDF库未加载');
+                    return;
+                }
+                
+                // 获取受试者姓名
+                const userName = document.getElementById('userName').value || '匿名受试者';
+                const fileName = `${userName}_听力检测结果.pdf`;
+                
+                // 创建一个临时的报告容器
+                const reportContainer = document.createElement('div');
+                reportContainer.style.cssText = 'width: 600px; margin: 0; padding: 30px; background: white; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; position: fixed; left: -1000px; top: 0; z-index: 9999;';
+                
+                // 构建报告HTML（简化版本）
+                const scoreDetailsText = document.getElementById('scoreDetails') ? 
+                    document.getElementById('scoreDetails').innerHTML.replace(/<[^>]*>/g, '\n') : '（未评分）';
+                const suggestionText = document.getElementById('suggestionList') ? 
+                    document.getElementById('suggestionList').innerHTML.replace(/<br>/g, '\n') : '（未评分）';
+                
+                reportContainer.innerHTML = `
+                    <style>
+                        body { margin: 0; padding: 0; }
+                        h1 { text-align: center; color: #313131; margin-bottom: 5px; font-size: 20px; }
+                        h2 { color: #313131; font-size: 16px; margin-top: 20px; margin-bottom: 10px; }
+                        p { margin: 5px 0; font-size: 14px; color: #515151; }
+                        table { width: 100%; font-size: 14px; border-collapse: collapse; }
+                        td { padding: 6px 0; border-bottom: 1px solid #eee; }
+                        .score-box { text-align: center; padding: 20px; background: #e8f5e9; border-radius: 8px; margin: 15px 0; }
+                        .section { padding: 15px; background: #f8f8f8; border-radius: 8px; margin-bottom: 10px; }
+                    </style>
+                    <h1>纯音测听检测报告</h1>
+                    <p style="text-align: center; color: #999; font-size: 12px;">Pure Tone Audiometry Test Report</p>
+                    <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+                    
+                    <h2>一、基本信息</h2>
+                    <table>
+                        <tr><td width="35%">受试者姓名</td><td>${document.getElementById('userName').value || '-'}</td></tr>
+                        <tr><td>性别</td><td>${document.getElementById('userGender').value || '-'}</td></tr>
+                        <tr><td>年龄</td><td>${document.getElementById('userAge').value ? document.getElementById('userAge').value + ' 岁' : '-'}</td></tr>
+                        <tr><td>测试人员</td><td>${document.getElementById('testerName').value || '-'}</td></tr>
+                        <tr><td>测试日期</td><td>${new Date().toLocaleDateString('zh-CN')}</td></tr>
+                    </table>
+                    
+                    <h2>二、测试结果</h2>
+                    <table>
+                        <tr><td width="40%">右耳气导听阈</td><td>${document.getElementById('manualRightAC').value || '-'} dB HL</td></tr>
+                        <tr><td>左耳气导听阈</td><td>${document.getElementById('manualLeftAC').value || '-'} dB HL</td></tr>
+                        <tr><td>右耳骨导听阈</td><td>${document.getElementById('manualRightBC').value || '-'} dB HL</td></tr>
+                        <tr><td>左耳骨导听阈</td><td>${document.getElementById('manualLeftBC').value || '-'} dB HL</td></tr>
+                        <tr><td>听力损失程度</td><td>${document.getElementById('manualDegree').value || '-'}</td></tr>
+                        <tr><td>听力损失性质</td><td>${document.getElementById('lossType').value || '-'}</td></tr>
+                    </table>
+                    
+                    <h2>三、建议</h2>
+                    <div class="section">${document.getElementById('suggestions').value || '（未填写）'}</div>
+                    
+                    <h2>四、AI评分</h2>
+                    <div class="score-box">
+                        <p style="font-size: 12px; color: #2e7d32; margin-bottom: 5px;">本次考试得分</p>
+                        <p style="font-size: 40px; font-weight: bold; color: #2e7d32;">${document.getElementById('totalScore').textContent || '0'} / 100</p>
+                        <p style="font-size: 14px; color: #2e7d32;">${document.getElementById('scoreLevel').textContent || '未评级'}</p>
+                    </div>
+                    
+                    <h3 style="font-size: 14px; color: #1e88e5; margin-bottom: 8px;">📋 评分详情</h3>
+                    <div class="section" style="font-size: 12px; line-height: 1.6;">${scoreDetailsText}</div>
+                    
+                    <h3 style="font-size: 14px; color: #e65100; margin-bottom: 8px;">💡 改进建议</h3>
+                    <div class="section" style="font-size: 12px; line-height: 1.6;">${suggestionText}</div>
+                    
+                    <p style="text-align: center; color: #999; font-size: 12px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">
+                        报告生成时间：${new Date().toLocaleString('zh-CN')}<br>
+                        纯音测听虚拟实训平台
+                    </p>
+                `;
+                
+                // 添加到页面
+                document.body.appendChild(reportContainer);
+                
+                // 使用html2canvas转换
+                html2canvas(reportContainer, {
+                    scale: 2,
+                    useCORS: true,
+                    backgroundColor: '#ffffff'
+                }).then(function(canvas) {
+                    // 移除临时容器
+                    document.body.removeChild(reportContainer);
+                    
+                    // 创建PDF
+                    const imgData = canvas.toDataURL('image/png');
+                    const jsPDF = window.jspdf ? window.jspdf.jsPDF : window.jsPDF;
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    const imgWidth = pdf.internal.pageSize.getWidth();
+                    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                    
+                    if (imgHeight > pdf.internal.pageSize.getHeight()) {
+                        // 多页处理
+                        const pageHeight = pdf.internal.pageSize.getHeight();
+                        let y = 0;
+                        while (y < imgHeight) {
+                            if (y > 0) pdf.addPage();
+                            pdf.addImage(imgData, 'PNG', 0, -y, imgWidth, imgHeight);
+                            y += pageHeight;
+                        }
+                    } else {
+                        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+                    }
+                    
+                    pdf.save(fileName);
+                }).catch(function(error) {
+                    document.body.removeChild(reportContainer);
+                    console.error('html2canvas转换失败:', error);
+                    alert('PDF导出失败: ' + error.message);
+                });
+                
+            } catch (error) {
+                console.error('PDF导出失败:', error);
+                alert('PDF导出失败: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

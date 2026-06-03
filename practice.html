@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>练习模块 - 纯音测听虚拟实训平台</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Three.js 3D库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- GLB模型加载器 -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <!-- 患者3D模块 -->
+            <script src="js/patient3D.js"></script>
+            <!-- PDF导出依赖 -->
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+        </head>
+<body>
+    <div class="container practice-container">
+        <div class="header-bar">
+            <h1>🎯 练习模块</h1>
+            <button class="back-btn" onclick="window.location.href='index.html'">🏠 返回首页</button>
+        </div>
+        
+        <!-- 顶部导航栏 -->
+        <div class="top-nav">
+            <div class="nav-left">
+                <label style="color: white; font-weight: 500;">选择案例：</label>
+                <select id="caseSelect" onchange="loadCase(this.value)">
+                    <option value="">请选择案例</option>
+                    <option value="normal">案例1：正常听力</option>
+                    <option value="mild-sensorineural">案例2：轻度感音神经性聋</option>
+                    <option value="moderate-conductive">案例3：中度传导性聋</option>
+                    <option value="mixed">案例4：混合性聋</option>
+                    <option value="severe">案例5：重度感音神经性聋</option>
+                </select>
+            </div>
+            <div class="nav-center">
+                <button id="startCaseBtn" class="btn-start" onclick="startCaseTest()" disabled>▶️ 开始测试</button>
+                <button id="resetTestBtn" class="btn-reset" onclick="resetTest()">🔄 重置测试</button>
+            </div>
+            <div class="nav-right">
+                <button id="showAnswerBtn" class="btn-answer" onclick="showCaseAnswer()" disabled>📖 查看答案</button>
+                <button id="aiScoreBtn" class="btn-score" onclick="calculateAIScore()" disabled>🤖 AI评分</button>
+                <button id="exportBtn" class="btn-export" onclick="exportToPDF()" disabled>📄 导出报告</button>
+            </div>
+        </div>
+        
+        <!-- 两列布局 -->
+        <div class="main-content">
+            <!-- 左侧栏 -->
+            <div class="left-sidebar">
+                <div class="panel">
+                    <h4>📋 案例信息</h4>
+                    <div id="caseInfo">
+                        <div id="caseDescription"></div>
+                        <div id="caseTarget"></div>
+                    </div>
+                    <div id="caseInfoPlaceholder">请选择案例开始测试</div>
+                </div>
+                
+                <div class="panel">
+                    <h4>👤 受试者信息</h4>
+                    <div class="form-group">
+                        <label>
+                            <span>姓名：</span>
+                            <input type="text" id="userName" placeholder="请输入姓名">
+                        </label>
+                        <label>
+                            <span>性别：</span>
+                            <select id="userGender">
+                                <option value="" selected></option>
+                                <option value="男">男</option>
+                                <option value="女">女</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span>年龄：</span>
+                            <input type="number" id="userAge" placeholder="请输入年龄" min="1" max="120">
+                        </label>
+                        <label>
+                            <span>测试人员：</span>
+                            <input type="text" id="testerName" placeholder="请输入测试人员姓名">
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="panel">
+                    <h4>📝 测试顺序</h4>
+                    <div class="sequence-list" id="sequenceList"></div>
+                </div>
+            </div>
+            
+            <!-- 右侧区域 -->
+            <div class="right-section">
+                <!-- 顶部：虚拟患者 + 听力图 -->
+                <div class="top-row">
+                    <!-- 虚拟患者 -->
+                    <div class="panel virtual-patient-panel">
+                        <h4>🤖 虚拟患者</h4>
+                        <div class="patient-display">
+                            <!-- 3D渲染容器 -->
+                            <div id="patient3DContainer"></div>
+                            <div class="patient-status">
+                                <div class="status-text" id="patientStatus"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 听力图 -->
+                    <div class="panel audiogram-panel">
+                        <h4>📊 听力图</h4>
+                        <div class="audiogram-wrapper">
+                            <canvas id="audiogram"></canvas>
+                        </div>
+                        <div class="legend">
+                            <div class="legend-item"><div class="symbol-circle"></div><span>右耳气导</span></div>
+                            <div class="legend-item"><span class="symbol-less">&lt;</span><span>右耳骨导</span></div>
+                            <div class="legend-item"><span class="symbol-x">✕</span><span>左耳气导</span></div>
+                            <div class="legend-item"><span class="symbol-greater">&gt;</span><span>左耳骨导</span></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 中部：控制区 -->
+                <div class="middle-row">
+                    <!-- 当前设置 -->
+                    <div class="panel settings-panel">
+                        <h4>⚙️ 当前设置</h4>
+                        <div class="current-settings">
+                            <div class="setting-item">
+                                <div class="setting-label">频率</div>
+                                <div class="setting-value frequency" id="currentFrequency">1000</div>
+                                <div class="setting-unit">Hz</div>
+                            </div>
+                            <div class="setting-item">
+                                <div class="setting-label">强度</div>
+                                <div class="setting-value level" id="currentLevel">40</div>
+                                <div class="setting-unit">dB HL</div>
+                            </div>
+                        </div>
+                        <div class="control-section">
+                            <div class="control-group">
+                                <button class="btn-minus" onclick="adjustFrequency(-1)">-</button>
+                                <button class="btn-plus" onclick="adjustFrequency(1)">+</button>
+                            </div>
+                            <div class="control-group">
+                                <button class="btn-minus" onclick="adjustLevel(-10)">-10</button>
+                                <button class="btn-plus" onclick="adjustLevel(5)">+5</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 核心操作 -->
+                    <div class="panel action-panel">
+                        <h4>🎮 核心操作</h4>
+                        <button class="stimulus-btn" onclick="presentStimulus()">🔊 给声</button>
+                        <div class="action-buttons">
+                            <button onclick="confirmThreshold()">✓ 确定听阈</button>
+                        </div>
+                    </div>
+                    
+                    <!-- 测试参数 -->
+                    <div class="panel params-panel">
+                        <h4>🔧 测试参数</h4>
+                        <div class="params-grid">
+                            <div>
+                                <label>测试类型</label>
+                                <select class="test-select" onchange="setTestType(this.value)" style="width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; background: white; cursor: pointer; appearance: auto;">
+                                    <option value="" selected></option>
+                                    <option value="air">气导</option>
+                                    <option value="bone">骨导</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label>测试耳</label>
+                                <select class="test-select" onchange="setEar(this.value)" style="width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; background: white; cursor: pointer; appearance: auto;">
+                                    <option value="" selected></option>
+                                    <option value="right">右耳</option>
+                                    <option value="left">左耳</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 测试状态 -->
+                    <div class="panel status-panel">
+                        <h4>📈 测试状态</h4>
+                        <div class="status-list">
+                            <div class="status-item"><span>类型：</span><span id="statusTestType">气导</span></div>
+                            <div class="status-item"><span>耳：</span><span id="statusEar">右耳</span></div>
+                            <div class="status-item"><span>已测：</span><span id="statusTested">0</span></div>
+                            <div class="status-item"><span>频率：</span><span id="statusFrequency">1000 Hz</span></div>
+                            <div class="status-item"><span>强度：</span><span id="statusLevel">40 dB HL</span></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 底部：提示和评分 -->
+                <div class="bottom-row">
+                    <!-- 操作提示 -->
+                    <div class="panel tips-panel">
+                        <h4>💡 操作提示</h4>
+                        <div style="background: #fef3c7; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+                            <div style="display: flex; align-items: center; gap: 8px; color: #d97706;">
+                                <span>📋</span>
+                                <span><strong>流程引导：</strong>请按顺序完成测试耳选择→频率选择→强度调节→纯音播放→应答判断→听阈记录</span>
+                            </div>
+                        </div>
+                        <div style="background: #dcfce7; padding: 12px; border-radius: 8px;">
+                            <div style="display: flex; align-items: center; gap: 8px; color: #166534;">
+                                <span>📊</span>
+                                <span><strong>听阈计算：</strong>请根据500Hz、1000Hz、2000Hz、4000Hz处的气导听阈值计算左右耳平均听阈</span>
+                            </div>
+                        </div>
+                        <div id="statusTip" class="tip-item status-tip"><strong>📢</strong><span id="statusTipContent"></span></div>
+                    </div>
+                    
+                    <!-- AI评分 -->
+                    <div class="panel ai-score-panel">
+                        <h4>🤖 AI 评分</h4>
+                        <div class="ai-score">
+                            <div class="score-label">综合评分</div>
+                            <div class="score-value" id="aiScoreValue">-</div>
+                            <div class="score-level" id="scoreLevel">未评级</div>
+                        </div>
+                        <div class="score-breakdown">
+                            <div class="score-item"><span class="label">基础信息</span><span class="value" id="scoreInfo">-</span></div>
+                            <div class="score-item"><span class="label">参数设置</span><span class="value" id="scoreParam">-</span></div>
+                            <div class="score-item"><span class="label">流程执行</span><span class="value" id="scoreFlow">-</span></div>
+                            <div class="score-item"><span class="label">数据计算</span><span class="value" id="scoreData">-</span></div>
+                            <div class="score-item"><span class="label">结果分析</span><span class="value" id="scoreAnalysis">-</span></div>
+                            <div class="score-item"><span class="label">规范操作</span><span class="value" id="scoreStandard">-</span></div>
+                        </div>
+                        <div class="suggestions-panel" id="suggestionsPanel" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px dashed #e2e8f0;">
+                            <h5>💡 改进建议</h5>
+                            <ul id="suggestionList" style="margin: 0; padding-left: 20px; font-size: 13px; color: #64748b;"></ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 结果对比 -->
+                <div class="panel" id="caseResult" style="display: none;">
+                    <h4>✅ 测试结果对比</h4>
+                    <div id="resultComparison"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        // 初始化3D患者
+        let patient3D;
+        
+        // 等待DOM和所有脚本加载完成
+        document.addEventListener('DOMContentLoaded', function() {
+            // 覆盖selectRandomCase，防止自动分配案例
+            window.selectRandomCase = function() {
+                // 如果main.js已经设置了案例信息，清理重新分配按钮
+                const caseInfoDiv = document.getElementById('caseInfo');
+                if (caseInfoDiv) {
+                    const reassignBtn = caseInfoDiv.querySelector('button');
+                    if (reassignBtn && reassignBtn.textContent.includes('重新分配')) {
+                        // 只移除按钮，保留子元素结构
+                        reassignBtn.remove();
+                        caseInfoDiv.style.display = 'none';
+                    }
+                }
+            };
+            
+            // 覆盖setPatient3D，防止它调用selectRandomCase
+            window.setPatient3D = function(patient) {
+                window.patient3D = patient;
+            };
+            
+            // 立即清理任何可能已生成的重新分配按钮
+            const caseInfoDiv = document.getElementById('caseInfo');
+            if (caseInfoDiv) {
+                const reassignBtn = caseInfoDiv.querySelector('button');
+                if (reassignBtn && reassignBtn.textContent.includes('重新分配')) {
+                    // 只移除按钮，保留子元素结构
+                    reassignBtn.remove();
+                    caseInfoDiv.style.display = 'none';
+                }
+            }
+            // 确保占位符显示
+            const placeholder = document.getElementById('caseInfoPlaceholder');
+            if (placeholder) {
+                placeholder.style.display = 'block';
+            }
+        });
+        
+        window.addEventListener('load', () => {
+            // 初始化3D患者，传入容器ID和模型路径
+            patient3D = new Patient3D('patient3DContainer', 'models/patient.glb');
+            // 将3D患者实例注册到全局，供main.js使用
+            if (window.setPatient3D) {
+                window.setPatient3D(patient3D);
+            }
+        });
+    </script>
+    <script src="js/main.js"></script>
+    <script>
+        // 案例映射表
+        const caseMapping = {
+            'normal': 0,
+            'mild-sensorineural': 1,
+            'moderate-conductive': 2,
+            'mixed': 3,
+            'severe': 4
+        };
+        
+        // 加载案例
+        function loadCase(caseKey) {
+            if (!caseKey) {
+                // 清空案例信息
+                document.getElementById('caseInfo').style.display = 'none';
+                document.getElementById('caseInfoPlaceholder').style.display = 'block';
+                document.getElementById('startCaseBtn').disabled = true;
+                document.getElementById('showAnswerBtn').disabled = true;
+                document.getElementById('aiScoreBtn').disabled = true;
+                document.getElementById('sequenceList').innerHTML = '';
+                state.currentCase = null;
+                return;
+            }
+            
+            // 获取案例索引
+            const caseIndex = caseMapping[caseKey];
+            if (caseIndex === undefined) return;
+            
+            // 设置当前案例
+            state.currentCase = testCases[caseIndex];
+            
+            // 显示案例信息（不包含重新分配按钮）
+            document.getElementById('caseInfoPlaceholder').style.display = 'none';
+            document.getElementById('caseInfo').style.display = 'block';
+            document.getElementById('caseDescription').innerHTML = `
+                <p><strong>案例名称：</strong>${state.currentCase.name}</p>
+                <p><strong>案例描述：</strong>${state.currentCase.description}</p>
+            `;
+            document.getElementById('caseTarget').innerHTML = `
+                <strong>🎯 测试目标：</strong>根据纯音测听结果，判断患者的听力损失类型和程度
+            `;
+            
+            // 更新3D患者的听力阈值
+            if (patient3D) {
+                patient3D.setHearingThresholds(state.currentCase.thresholds);
+            }
+            
+            // 显示测试顺序
+            showTestSequence();
+            
+            // 启用按钮
+            document.getElementById('startCaseBtn').disabled = false;
+            document.getElementById('showAnswerBtn').disabled = false;
+            document.getElementById('aiScoreBtn').disabled = false;
+            document.getElementById('exportBtn').disabled = false;
+            
+            // 重置测试状态
+            state.results = { right: { air: {}, bone: {} }, left: { air: {}, bone: {} } };
+            state.testedPoints = new Set();
+            document.getElementById('statusTested').textContent = '0';
+            
+            // 初始化测试耳状态（默认选择右耳）
+            state.ear = 'right';
+            state.earSelected = true;
+            document.getElementById('statusEar').textContent = '右耳';
+            
+            // 只重置测试数据，不影响案例信息
+            resetTestData();
+            drawAudiogram();
+        }
+        
+        // 只重置测试数据，保留案例信息
+        function resetTestData() {
+            // 重置频率和强度
+            document.getElementById('currentFrequency').textContent = '1000';
+            document.getElementById('currentLevel').textContent = '40';
+            document.getElementById('statusFrequency').textContent = '1000 Hz';
+            document.getElementById('statusLevel').textContent = '40 dB HL';
+            state.currentLevel = 40;
+            state.currentFrequencyIndex = 3;
+        }
+        
+        // 显示测试顺序
+        function showTestSequence() {
+            const sequence = ['1000', '2000', '4000', '8000', '1000(复测)', '500', '250', '125'];
+            const sequenceList = document.getElementById('sequenceList');
+            
+            sequenceList.innerHTML = sequence.map((freq, index) => `
+                <div class="sequence-item" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f1f5f9; border-radius: 6px; font-size: 13px;">
+                    <span style="width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; background: #667eea; color: white; border-radius: 4px; font-size: 11px; font-weight: bold;">${index + 1}</span>
+                    <span style="color: #334155; font-weight: 500;">${freq}Hz</span>
+                    ${index < sequence.length - 1 ? '<span style="color: #cbd5e1;">→</span>' : ''}
+                </div>
+            `).join('');
+        }
+        
+        // 扩展给声函数，添加3D动画
+        const originalPresentStimulus = presentStimulus;
+        window.presentStimulus = function() {
+            originalPresentStimulus();
+            
+            // 3D声音动画
+            if (patient3D) {
+                const currentEar = document.getElementById('statusEar').textContent;
+                patient3D.playSound(currentEar === '右耳' ? 'right' : 'left');
+            }
+        };
+        
+        // 覆盖setEar函数，不调用resetTest以保留受试者信息
+        window.setEar = function(ear) {
+            state.ear = ear;
+            state.earSelected = true;
+            document.querySelector('.btn-right')?.classList.remove('active');
+            document.querySelector('.btn-left')?.classList.remove('active');
+            document.querySelector(`.btn-${ear}`)?.classList.add('active');
+            document.getElementById('statusEar').textContent = ear === 'right' ? '右耳' : '左耳';
+            // 不调用resetTest，保留受试者信息
+        };
+        
+        // 覆盖setTestType函数，不调用resetTest以保留受试者信息
+        window.setTestType = function(type) {
+            if (!type) return; // 如果选择的是空选项，不执行操作
+            
+            state.testType = type;
+            document.getElementById('statusTestType').textContent = type === 'air' ? '气导' : '骨导';
+            
+            // 更新频率显示（根据测试类型切换频率范围）
+            const frequencies = type === 'air' ? [125, 250, 500, 1000, 2000, 4000, 8000] : [250, 500, 1000, 2000, 4000];
+            
+            // 获取当前频率值
+            const currentFreq = parseInt(document.getElementById('currentFrequency').textContent);
+            
+            // 如果当前频率不在新类型的频率列表中，切换到1000Hz
+            let newIndex = frequencies.indexOf(currentFreq);
+            if (newIndex === -1) {
+                newIndex = frequencies.indexOf(1000) >= 0 ? frequencies.indexOf(1000) : 0;
+            }
+            
+            state.currentFrequencyIndex = newIndex;
+            const freq = frequencies[newIndex];
+            document.getElementById('currentFrequency').textContent = freq;
+            document.getElementById('statusFrequency').textContent = freq + ' Hz';
+            
+            // 只更新存在的元素
+            const freqInput = document.getElementById('frequency');
+            if (freqInput) freqInput.value = freq.toString();
+        };
+        
+        // 患者反应处理
+        window.handlePatientResponse = function(heard) {
+            if (heard && patient3D) {
+                const currentEar = document.getElementById('statusEar').textContent;
+                const ear = currentEar === '右耳' ? 'right' : 'left';
+                // 左右移动响应
+                patient3D.reactToSound(ear);
+            }
+        };
+        
+        // 开始测试
+        function startCaseTest() {
+            alert('测试开始！请按照测试顺序进行纯音测听。');
+            document.getElementById('statusTipContent').textContent = '测试已开始，请按顺序进行测听';
+        }
+        
+        // 重置测试（完全重置所有内容）
+        window.resetTest = function() {
+            // 重置测试状态
+            state.results = { right: { air: {}, bone: {} }, left: { air: {}, bone: {} } };
+            state.testedPoints = new Set();
+            document.getElementById('statusTested').textContent = '0';
+            
+            // 清空听力图
+            drawAudiogram();
+            
+            // 清空受试者信息
+            document.getElementById('userName').value = '';
+            document.getElementById('userGender').value = '';
+            document.getElementById('userAge').value = '';
+            document.getElementById('testerName').value = '';
+            
+            // 重置测试参数（恢复为空白）
+            // 直接通过test-select类选择器获取所有测试参数的select元素
+            const testSelects = document.querySelectorAll('.params-panel .test-select');
+            testSelects.forEach(select => {
+                select.value = '';
+            });
+            document.getElementById('statusTestType').textContent = '';
+            document.getElementById('statusEar').textContent = '';
+            state.earSelected = false;
+            state.testType = 'air'; // 重置为默认测试类型
+            
+            // 重置频率和强度（只更新存在的元素）
+            const freqInput = document.getElementById('frequency');
+            const intensityInput = document.getElementById('intensity');
+            if (freqInput) freqInput.value = '1000';
+            if (intensityInput) intensityInput.value = '40';
+            document.getElementById('currentFrequency').textContent = '1000';
+            document.getElementById('currentLevel').textContent = '40';
+            document.getElementById('statusFrequency').textContent = '1000 Hz';
+            document.getElementById('statusLevel').textContent = '40 dB HL';
+            
+            // 清空AI评分（只更新存在的元素）
+            document.getElementById('aiScoreValue').textContent = '-';
+            document.getElementById('scoreFlow').textContent = '-';
+            const scoreAccuracy = document.getElementById('scoreAccuracy');
+            if (scoreAccuracy) scoreAccuracy.textContent = '-';
+            document.getElementById('scoreStandard').textContent = '-';
+            
+            // 清空测试状态
+            document.getElementById('statusTipContent').textContent = '测试已重置，请选择案例开始';
+            
+            // 隐藏查看答案结果
+            document.getElementById('caseResult').style.display = 'none';
+            document.getElementById('resultComparison').innerHTML = '';
+            
+            // 禁用按钮
+            document.getElementById('startCaseBtn').disabled = true;
+            document.getElementById('showAnswerBtn').disabled = true;
+            document.getElementById('aiScoreBtn').disabled = true;
+            document.getElementById('exportBtn').disabled = true;
+            
+            // 清空测试顺序
+            document.getElementById('sequenceList').innerHTML = '';
+            
+            // 隐藏测试参数区域（只更新存在的元素）
+            const paramsPanel = document.getElementById('paramsPanel');
+            if (paramsPanel) paramsPanel.style.display = 'none';
+            
+            // 显示案例占位符
+            document.getElementById('caseInfo').style.display = 'none';
+            document.getElementById('caseInfoPlaceholder').style.display = 'block';
+            
+            // 重置当前案例
+            state.currentCase = null;
+            
+            // 延迟执行案例选择下拉框重置，确保其他操作完成
+            setTimeout(function() {
+                const caseSelect = document.getElementById('caseSelect');
+                if (caseSelect) {
+                    caseSelect.selectedIndex = 0; // 选择第一个选项（请选择案例）
+                }
+            }, 10);
+        }
+        
+        // 查看答案
+        function showCaseAnswer() {
+            if (!state.currentCase) return;
+            
+            const caseResult = document.getElementById('caseResult');
+            const resultComparison = document.getElementById('resultComparison');
+            
+            // 显示标准答案
+            resultComparison.innerHTML = `
+                <div style="margin-bottom: 20px; padding: 15px; background: #f0fdf4; border-radius: 8px;">
+                    <h5 style="color: #166534; margin-bottom: 10px;">📝 标准答案</h5>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div>
+                            <strong>右耳气导：</strong><br>
+                            ${Object.entries(state.currentCase.thresholds.right.air).map(([freq, val]) => 
+                                `${freq}Hz: ${val}dB`).join('<br>')}
+                        </div>
+                        <div>
+                            <strong>左耳气导：</strong><br>
+                            ${Object.entries(state.currentCase.thresholds.left.air).map(([freq, val]) => 
+                                `${freq}Hz: ${val}dB`).join('<br>')}
+                        </div>
+                        <div>
+                            <strong>右耳骨导：</strong><br>
+                            ${Object.entries(state.currentCase.thresholds.right.bone).map(([freq, val]) => 
+                                `${freq}Hz: ${val}dB`).join('<br>')}
+                        </div>
+                        <div>
+                            <strong>左耳骨导：</strong><br>
+                            ${Object.entries(state.currentCase.thresholds.left.bone).map(([freq, val]) => 
+                                `${freq}Hz: ${val}dB`).join('<br>')}
+                        </div>
+                    </div>
+                </div>
+                <div style="padding: 15px; background: #fef3c7; border-radius: 8px;">
+                    <h5 style="color: #d97706; margin-bottom: 10px;">🎯 案例分析</h5>
+                    <p><strong>案例名称：</strong>${state.currentCase.name}</p>
+                    <p><strong>案例描述：</strong>${state.currentCase.description}</p>
+                </div>
+            `;
+            
+            caseResult.style.display = 'block';
+        }
+        
+        // AI评分函数（按照考试模块标准）
+        function calculateAIScore() {
+            if (!state.currentCase) {
+                alert('请先选择案例！');
+                return;
+            }
+            
+            const scores = {
+                infoFill: scoreInfoFill(),      // 基础信息填写 10%
+                paramSetup: scoreParamSetup(),   // 测试参数设置 20%
+                testFlow: scoreTestFlow(),       // 测试流程执行 30%
+                dataCalc: scoreDataCalc(),       // 听阈数据记录与计算 20%
+                resultAnalysis: scoreResultAnalysis(), // 结果分析 15%
+                errorPrevention: scoreErrorPrevention() // 防错与规范操作 5%
+            };
+            
+            // 计算总分
+            const totalScore = Math.round(
+                scores.infoFill * 0.1 +
+                scores.paramSetup * 0.2 +
+                scores.testFlow * 0.3 +
+                scores.dataCalc * 0.2 +
+                scores.resultAnalysis * 0.15 +
+                scores.errorPrevention * 0.05
+            );
+            
+            // 更新显示（按照考试模块标准）
+            document.getElementById('aiScoreValue').textContent = totalScore + '/100';
+            
+            // 设置评级
+            let level = '未评级';
+            if (totalScore >= 90) level = '🏆 优秀';
+            else if (totalScore >= 80) level = '👍 良好';
+            else if (totalScore >= 70) level = '😊 中等';
+            else if (totalScore >= 60) level = '💪 及格';
+            else level = '📚 需要改进';
+            document.getElementById('scoreLevel').textContent = level;
+            
+            // 更新各维度评分
+            document.getElementById('scoreInfo').textContent = scores.infoFill + '/100';
+            document.getElementById('scoreParam').textContent = scores.paramSetup + '/100';
+            document.getElementById('scoreFlow').textContent = scores.testFlow + '/100';
+            document.getElementById('scoreData').textContent = scores.dataCalc + '/100';
+            document.getElementById('scoreAnalysis').textContent = scores.resultAnalysis + '/100';
+            document.getElementById('scoreStandard').textContent = scores.errorPrevention + '/100';
+            
+            // 生成并显示改进建议
+            generateSuggestions(scores);
+            
+            // 显示结果对比
+            showCaseAnswer();
+        }
+        
+        // 基础信息填写评分（10%）
+        function scoreInfoFill() {
+            let score = 0;
+            const fields = [
+                document.getElementById('userName').value,
+                document.getElementById('userGender').value,
+                document.getElementById('userAge').value,
+                document.getElementById('testerName').value
+            ];
+            const filledCount = fields.filter(f => f && f.trim()).length;
+            
+            if (filledCount === 4) score = 100;
+            else if (filledCount === 3) score = 75;
+            else if (filledCount === 2) score = 50;
+            else if (filledCount === 1) score = 25;
+            else score = 0;
+            
+            return score;
+        }
+        
+        // 测试参数设置评分（20%）
+        function scoreParamSetup() {
+            let score = 0;
+            let points = 0;
+            
+            // 检查测试类型是否正确设置
+            const testTypeSelect = document.querySelector('.params-panel select:first-child');
+            if (testTypeSelect && testTypeSelect.value) points++;
+            
+            // 检查测试耳是否正确设置
+            const earSelect = document.querySelector('.params-panel select:last-child');
+            if (earSelect && earSelect.value) points++;
+            
+            // 检查是否进行了频率和强度调节
+            const testedCount = parseInt(document.getElementById('statusTested').textContent) || 0;
+            if (testedCount >= 2) points++;
+            if (testedCount >= 5) points++;
+            
+            score = Math.round((points / 4) * 100);
+            return score;
+        }
+        
+        // 测试流程执行评分（30%）
+        function scoreTestFlow() {
+            let score = 0;
+            const testedCount = parseInt(document.getElementById('statusTested').textContent) || 0;
+            
+            // 根据测试点数评分
+            if (testedCount >= 14) score = 100;
+            else if (testedCount >= 12) score = 85;
+            else if (testedCount >= 10) score = 70;
+            else if (testedCount >= 8) score = 55;
+            else if (testedCount >= 5) score = 40;
+            else if (testedCount >= 2) score = 25;
+            else score = 0;
+            
+            return score;
+        }
+        
+        // 听阈数据记录与计算评分（20%）
+        function scoreDataCalc() {
+            let score = 0;
+            let points = 0;
+            
+            // 检查测试结果数据
+            const results = state.results;
+            const rightAirCount = Object.keys(results.right.air).length;
+            const leftAirCount = Object.keys(results.left.air).length;
+            const rightBoneCount = Object.keys(results.right.bone).length;
+            const leftBoneCount = Object.keys(results.left.bone).length;
+            
+            const totalCount = rightAirCount + leftAirCount + rightBoneCount + leftBoneCount;
+            
+            if (totalCount >= 14) points += 2;
+            else if (totalCount >= 7) points += 1;
+            
+            // 检查数据准确性（与标准答案对比）
+            if (state.currentCase) {
+                let correctCount = 0;
+                let totalChecked = 0;
+                
+                const thresholds = state.currentCase.thresholds;
+                const freqList = [125, 250, 500, 1000, 2000, 4000, 8000];
+                
+                freqList.forEach(freq => {
+                    if (results.right.air[freq] !== undefined && thresholds.right.air[freq] !== undefined) {
+                        totalChecked++;
+                        if (Math.abs(results.right.air[freq] - thresholds.right.air[freq]) <= 10) correctCount++;
+                    }
+                    if (results.left.air[freq] !== undefined && thresholds.left.air[freq] !== undefined) {
+                        totalChecked++;
+                        if (Math.abs(results.left.air[freq] - thresholds.left.air[freq]) <= 10) correctCount++;
+                    }
+                });
+                
+                const boneFreqs = [250, 500, 1000, 2000, 4000];
+                boneFreqs.forEach(freq => {
+                    if (results.right.bone[freq] !== undefined && thresholds.right.bone[freq] !== undefined) {
+                        totalChecked++;
+                        if (Math.abs(results.right.bone[freq] - thresholds.right.bone[freq]) <= 10) correctCount++;
+                    }
+                    if (results.left.bone[freq] !== undefined && thresholds.left.bone[freq] !== undefined) {
+                        totalChecked++;
+                        if (Math.abs(results.left.bone[freq] - thresholds.left.bone[freq]) <= 10) correctCount++;
+                    }
+                });
+                
+                if (totalChecked > 0 && correctCount / totalChecked >= 0.8) points += 2;
+                else if (totalChecked > 0 && correctCount / totalChecked >= 0.5) points += 1;
+            }
+            
+            score = Math.round((points / 4) * 100);
+            return score;
+        }
+        
+        // 结果分析评分（15%）
+        function scoreResultAnalysis() {
+            let score = 100; // 默认满分，因为练习模式主要关注测试过程
+            
+            // 检查是否有测试数据
+            const testedCount = parseInt(document.getElementById('statusTested').textContent) || 0;
+            if (testedCount === 0) score = 0;
+            else if (testedCount < 5) score = 50;
+            else if (testedCount < 10) score = 75;
+            
+            return score;
+        }
+        
+        // 防错与规范操作评分（5%）
+        function scoreErrorPrevention() {
+            // 默认满分，实际项目中会记录错误次数
+            return 100;
+        }
+        
+        // 生成改进建议
+        function generateSuggestions(scores) {
+            const suggestions = [];
+            
+            // 基础信息建议
+            if (scores.infoFill < 100) {
+                suggestions.push('请确保填写完整的受试者信息（姓名、性别、年龄、测试人员）');
+            }
+            
+            // 参数设置建议
+            if (scores.paramSetup < 75) {
+                suggestions.push('请正确选择测试类型和气导/骨导参数');
+            }
+            
+            // 流程执行建议
+            if (scores.testFlow < 50) {
+                suggestions.push('测试流程不完整，请按照标准流程完成所有频率点的测试');
+            } else if (scores.testFlow < 85) {
+                suggestions.push('建议完成更多频率点的测试以获得更完整的听力图');
+            }
+            
+            // 数据计算建议
+            if (scores.dataCalc < 50) {
+                suggestions.push('听阈测试结果与标准答案偏差较大，请检查测试方法');
+            } else if (scores.dataCalc < 80) {
+                suggestions.push('部分频率点的听阈值需要调整，建议重新测试');
+            }
+            
+            // 结果分析建议
+            if (scores.resultAnalysis < 75) {
+                suggestions.push('建议完成更完整的测试以进行准确的结果分析');
+            }
+            
+            // 规范操作建议
+            if (scores.errorPrevention < 100) {
+                suggestions.push('请注意操作规范，减少测试错误');
+            }
+            
+            // 显示建议
+            const suggestionList = document.getElementById('suggestionList');
+            const suggestionsPanel = document.getElementById('suggestionsPanel');
+            
+            if (suggestions.length > 0) {
+                suggestionList.innerHTML = suggestions.map(s => `<li>${s}</li>`).join('');
+                suggestionsPanel.style.display = 'block';
+            } else {
+                suggestionList.innerHTML = '<li>🎉 测试表现优秀，继续保持！</li>';
+                suggestionsPanel.style.display = 'block';
+            }
+        }
+        
+        // PDF导出函数
+        function exportToPDF() {
+            try {
+                // 检查依赖是否加载
+                if (typeof html2canvas === 'undefined') {
+                    alert('html2canvas库未加载');
+                    return;
+                }
+                if (typeof jspdf === 'undefined') {
+                    alert('jsPDF库未加载');
+                    return;
+                }
+                
+                // 获取表单数据，添加空值检查
+                const userName = document.getElementById('userName') ? document.getElementById('userName').value : '';
+                const userGender = document.getElementById('userGender') ? document.getElementById('userGender').value : '';
+                const userAge = document.getElementById('userAge') ? document.getElementById('userAge').value : '';
+                const testerName = document.getElementById('testerName') ? document.getElementById('testerName').value : '';
+                
+                // 获取评分数据
+                const scoreInfo = document.getElementById('scoreInfo') ? document.getElementById('scoreInfo').textContent : '-';
+                const scoreParam = document.getElementById('scoreParam') ? document.getElementById('scoreParam').textContent : '-';
+                const scoreFlow = document.getElementById('scoreFlow') ? document.getElementById('scoreFlow').textContent : '-';
+                const scoreData = document.getElementById('scoreData') ? document.getElementById('scoreData').textContent : '-';
+                const scoreAnalysis = document.getElementById('scoreAnalysis') ? document.getElementById('scoreAnalysis').textContent : '-';
+                const scoreStandard = document.getElementById('scoreStandard') ? document.getElementById('scoreStandard').textContent : '-';
+                const aiScoreValue = document.getElementById('aiScoreValue') ? document.getElementById('aiScoreValue').textContent : '0/100';
+                const scoreLevel = document.getElementById('scoreLevel') ? document.getElementById('scoreLevel').textContent : '未评级';
+                
+                // 获取受试者姓名用于文件名
+                const fileName = `${userName || '匿名受试者'}_听力检测结果.pdf`;
+                
+                // 创建一个临时的报告容器
+                const reportContainer = document.createElement('div');
+                reportContainer.style.cssText = 'width: 600px; margin: 0; padding: 30px; background: white; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; position: fixed; left: -1000px; top: 0; z-index: 9999;';
+                document.body.appendChild(reportContainer);
+                
+                // 获取建议列表
+                const suggestionItems = document.querySelectorAll('#suggestionList li');
+                const suggestionText = Array.from(suggestionItems).map(item => item.textContent).join('<br>');
+                
+                // 获取当前案例信息
+                const caseName = state.currentCase ? state.currentCase.name : '未选择案例';
+                const caseDesc = state.currentCase ? state.currentCase.description : '';
+                
+                reportContainer.innerHTML = `
+                    <style>
+                        * { margin: 0; padding: 0; box-sizing: border-box; }
+                        body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
+                        h1 { text-align: center; color: #313131; margin-bottom: 5px; font-size: 20px; }
+                        h2 { color: #313131; font-size: 16px; margin-top: 20px; margin-bottom: 10px; }
+                        h3 { color: #313131; font-size: 14px; margin-top: 15px; margin-bottom: 8px; }
+                        p { margin: 5px 0; font-size: 14px; color: #515151; }
+                        table { width: 100%; font-size: 14px; border-collapse: collapse; }
+                        td { padding: 6px 10px; border: 1px solid #ddd; }
+                        th { padding: 8px 10px; background: #f5f5f5; border: 1px solid #ddd; text-align: left; font-weight: normal; }
+                        .score-box { text-align: center; padding: 20px; background: #e8f5e9; border-radius: 8px; margin: 15px 0; }
+                        .section { padding: 15px; background: #f8f8f8; border-radius: 8px; margin-bottom: 10px; line-height: 1.6; }
+                    </style>
+                    <h1>纯音测听检测报告</h1>
+                    <p style="text-align: center; color: #999; font-size: 12px;">Pure Tone Audiometry Test Report</p>
+                    <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+                    
+                    <h2>一、基本信息</h2>
+                    <table>
+                        <tr><td width="35%">受试者姓名</td><td>${userName || '-'}</td></tr>
+                        <tr><td>性别</td><td>${userGender || '-'}</td></tr>
+                        <tr><td>年龄</td><td>${userAge ? userAge + ' 岁' : '-'}</td></tr>
+                        <tr><td>测试人员</td><td>${testerName || '-'}</td></tr>
+                        <tr><td>测试日期</td><td>${new Date().toLocaleDateString('zh-CN')}</td></tr>
+                        <tr><td>测试案例</td><td>${caseName}</td></tr>
+                    </table>
+                    
+                    <h2>二、测试结果</h2>
+                    <table>
+                        <tr><td width="40%">右耳气导听阈</td><td>${document.getElementById('manualRightAC') ? document.getElementById('manualRightAC').value : '-'} dB HL</td></tr>
+                        <tr><td>左耳气导听阈</td><td>${document.getElementById('manualLeftAC') ? document.getElementById('manualLeftAC').value : '-'} dB HL</td></tr>
+                        <tr><td>右耳骨导听阈</td><td>${document.getElementById('manualRightBC') ? document.getElementById('manualRightBC').value : '-'} dB HL</td></tr>
+                        <tr><td>左耳骨导听阈</td><td>${document.getElementById('manualLeftBC') ? document.getElementById('manualLeftBC').value : '-'} dB HL</td></tr>
+                    </table>
+                    
+                    <h2>三、案例信息</h2>
+                    <div class="section">${caseDesc || '（暂无）'}</div>
+                    
+                    <h2>四、AI评分</h2>
+                    <div class="score-box">
+                        <p style="font-size: 12px; color: #2e7d32; margin-bottom: 5px;">综合评分</p>
+                        <p style="font-size: 40px; font-weight: bold; color: #2e7d32;">${aiScoreValue}</p>
+                        <p style="font-size: 14px; color: #2e7d32;">${scoreLevel}</p>
+                    </div>
+                    
+                    <h3>📋 评分详情</h3>
+                    <table>
+                        <tr><th>评分项</th><th>得分</th><th>权重</th></tr>
+                        <tr><td>基础信息</td><td>${scoreInfo}</td><td>10%</td></tr>
+                        <tr><td>参数设置</td><td>${scoreParam}</td><td>20%</td></tr>
+                        <tr><td>流程执行</td><td>${scoreFlow}</td><td>30%</td></tr>
+                        <tr><td>数据计算</td><td>${scoreData}</td><td>20%</td></tr>
+                        <tr><td>结果分析</td><td>${scoreAnalysis}</td><td>15%</td></tr>
+                        <tr><td>规范操作</td><td>${scoreStandard}</td><td>5%</td></tr>
+                    </table>
+                    
+                    <h3>💡 改进建议</h3>
+                    <div class="section" style="font-size: 12px;">${suggestionText || '（未评分）'}</div>
+                    
+                    <p style="text-align: center; color: #999; font-size: 12px; margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">
+                        报告生成时间：${new Date().toLocaleString('zh-CN')}<br>
+                        纯音测听练习系统
+                    </p>
+                `;
+                
+                // 使用html2canvas和jsPDF生成PDF
+                html2canvas(reportContainer, {
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    backgroundColor: '#ffffff'
+                }).then(canvas => {
+                    const { jsPDF } = window.jspdf;
+                    const imgData = canvas.toDataURL('image/png');
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    const pdfHeight = pdf.internal.pageSize.getHeight();
+                    const imgWidth = canvas.width;
+                    const imgHeight = canvas.height;
+                    const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+                    const imgHeightScaled = imgHeight * ratio;
+                    
+                    // 如果图片高度超过PDF高度，需要调整
+                    let y = 10;
+                    if (imgHeightScaled > pdfHeight - 20) {
+                        // 缩小比例以适应页面
+                        const newRatio = (pdfHeight - 20) / imgHeight;
+                        imgHeightScaled = pdfHeight - 20;
+                        pdf.addImage(imgData, 'PNG', 10, y, pdfWidth - 20, imgHeightScaled);
+                    } else {
+                        const x = (pdfWidth - imgWidth * ratio) / 2;
+                        pdf.addImage(imgData, 'PNG', x, y, imgWidth * ratio, imgHeightScaled);
+                    }
+                    
+                    pdf.save(fileName);
+                    
+                    // 清理临时容器
+                    document.body.removeChild(reportContainer);
+                }).catch(err => {
+                    console.error('PDF生成失败:', err);
+                    alert('PDF生成失败: ' + err.message);
+                    if (reportContainer && reportContainer.parentNode) {
+                        document.body.removeChild(reportContainer);
+                    }
+                });
+            } catch (err) {
+                console.error('导出PDF失败:', err);
+                alert('导出PDF失败: ' + err.message);
+            }
+        }
+        
+        // 基础信息填写评分（10%）
+        function scoreInfoFill() {
+            let score = 0;
+            const fields = [
+                document.getElementById('userName').value,
+                document.getElementById('userGender').value,
+                document.getElementById('userAge').value,
+                document.getElementById('testerName').value
+            ];
+            const filledCount = fields.filter(f => f && f.trim()).length;
+            
+            if (filledCount === 4) score = 100;
+            else if (filledCount === 3) score = 75;
+            else if (filledCount === 2) score = 50;
+            else if (filledCount === 1) score = 25;
+            else score = 0;
+            
+            return score;
+        }
+        
+        // 测试参数设置评分（20%）
+        function scoreParamSetup() {
+            let score = 0;
+            let points = 0;
+            
+            // 检查测试类型和测试耳是否正确选择
+            if (document.getElementById('statusTestType').textContent) points++;
+            if (document.getElementById('statusEar').textContent) points++;
+            
+            // 检查是否进行了频率和强度调节
+            const testedCount = parseInt(document.getElementById('statusTested').textContent) || 0;
+            if (testedCount >= 2) points++;
+            if (testedCount >= 5) points++;
+            
+            score = Math.round((points / 4) * 100);
+            return score;
+        }
+        
+        // 测试流程执行评分（30%）
+        function scoreTestFlow() {
+            let score = 0;
+            const testedCount = parseInt(document.getElementById('statusTested').textContent) || 0;
+            
+            // 根据测试点数评分
+            if (testedCount >= 14) score = 100;  // 双耳气导完整测试
+            else if (testedCount >= 12) score = 85;
+            else if (testedCount >= 10) score = 70;
+            else if (testedCount >= 8) score = 55;
+            else if (testedCount >= 5) score = 40;
+            else if (testedCount >= 2) score = 25;
+            else score = 0;
+            
+            return score;
+        }
+        
+        // 听阈数据记录与计算评分（20%）
+        function scoreDataCalc() {
+            let score = 0;
+            let correctCount = 0;
+            let totalCount = 0;
+            
+            if (!state.currentCase) return 0;
+            
+            const thresholds = state.currentCase.thresholds;
+            
+            ['right', 'left'].forEach(ear => {
+                ['air', 'bone'].forEach(type => {
+                    Object.keys(thresholds[ear][type]).forEach(freq => {
+                        totalCount++;
+                        const expected = thresholds[ear][type][freq];
+                        const actual = state.results[ear][type][freq];
+                        if (actual !== undefined && Math.abs(actual - expected) <= 10) {
+                            correctCount++;
+                        }
+                    });
+                });
+            });
+            
+            if (totalCount > 0) {
+                score = Math.round((correctCount / totalCount) * 100);
+            }
+            
+            return score;
+        }
+        
+        // 结果分析评分（15%）
+        function scoreResultAnalysis() {
+            let score = 0;
+            const testedCount = parseInt(document.getElementById('statusTested').textContent) || 0;
+            
+            // 根据测试完整性评分
+            if (testedCount >= 14) score = 100;
+            else if (testedCount >= 10) score = 75;
+            else if (testedCount >= 5) score = 50;
+            else if (testedCount >= 2) score = 25;
+            else score = 0;
+            
+            return score;
+        }
+        
+        // 防错与规范操作评分（5%）
+        function scoreErrorPrevention() {
+            // 根据测试过程中的错误次数评分，这里简化处理
+            return 100;
+        }
+    </script>
+</body>
+</html>

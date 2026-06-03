@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GLB测试</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="js/loaders/GLTFLoader.js"></script>
+    <style>
+        body { margin: 0; }
+        #container { width: 600px; height: 400px; border: 2px solid red; }
+        .log { background: #f0f0f0; padding: 10px; font-family: monospace; font-size: 12px; height: 200px; overflow-y: scroll; }
+    </style>
+</head>
+<body>
+    <h1>GLB模型加载测试</h1>
+    <div id="container"></div>
+    <div class="log" id="log"></div>
+    
+    <script>
+        function log(msg) {
+            document.getElementById('log').innerHTML += msg + '<br>';
+            console.log(msg);
+        }
+        
+        log('=== 开始测试 ===');
+        log('Three.js版本: ' + THREE.REVISION);
+        log('GLTFLoader是否可用: ' + (typeof THREE.GLTFLoader !== 'undefined'));
+        
+        // 创建场景
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, 600/400, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(600, 400);
+        renderer.setClearColor(0xf0f0f0);
+        document.getElementById('container').appendChild(renderer.domElement);
+        
+        // 添加光源
+        const light = new THREE.AmbientLight(0xffffff);
+        scene.add(light);
+        
+        camera.position.z = 5;
+        
+        // 尝试加载GLB模型
+        if (typeof THREE.GLTFLoader !== 'undefined') {
+            log('开始加载GLB模型...');
+            const loader = new THREE.GLTFLoader();
+            
+            loader.load(
+                'models/patient.glb',
+                function(gltf) {
+                    log('✓ GLB模型加载成功!');
+                    log('模型场景类型: ' + typeof gltf.scene);
+                    log('模型子元素数量: ' + gltf.scene.children.length);
+                    
+                    gltf.scene.scale.set(0.5, 0.5, 0.5);
+                    scene.add(gltf.scene);
+                    log('✓ 模型已添加到场景');
+                },
+                function(xhr) {
+                    log('加载进度: ' + (xhr.loaded / xhr.total * 100).toFixed(0) + '%');
+                },
+                function(error) {
+                    log('✗ GLB模型加载失败: ' + error.message);
+                    // 创建一个测试立方体
+                    log('创建测试立方体作为替代...');
+                    const geometry = new THREE.BoxGeometry(1, 1, 1);
+                    const material = new THREE.MeshBasicMaterial({color: 0x00ff00});
+                    const cube = new THREE.Mesh(geometry, material);
+                    scene.add(cube);
+                }
+            );
+        } else {
+            log('✗ GLTFLoader不可用');
+            // 创建一个测试立方体
+            const geometry = new THREE.BoxGeometry(1, 1, 1);
+            const material = new THREE.MeshBasicMaterial({color: 0xff0000});
+            const cube = new THREE.Mesh(geometry, material);
+            scene.add(cube);
+        }
+        
+        // 动画循环
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>

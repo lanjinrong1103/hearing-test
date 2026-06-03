@@ -1,15 +1,38 @@
 {
   "name": "hearing-test",
   "version": "1.0.0",
-  "description": "",
-  "main": "server.js",
-  "devDependencies": {},
+  "description": "听力测试平台",
+  "main": "main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node server.js",
+    "electron:start": "electron .",
+    "pack:win": "electron-builder --win portable"
   },
-  "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs"
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.2.1",
+    "sql.js": "^1.10.3"
+  },
+  "devDependencies": {
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3",
+    "electron-installer-windows": "^3.0.0",
+    "electron-packager": "^17.1.2"
+  },
+  "build": {
+    "appId": "com.example.hearing-test",
+    "productName": "听力测试平台",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!node_modules/{electron,electron-builder}/**"
+    ],
+    "win": {
+      "target": "portable"
+    }
+  }
 }

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GLB调试</title>
+    <style>
+        body { font-family: monospace; font-size: 12px; }
+        .log { background: #f8f8f8; padding: 10px; margin: 10px; border: 1px solid #ccc; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <h1>GLB文件调试工具</h1>
+    
+    <div class="log" id="log"></div>
+    
+    <script>
+        function log(msg, type = 'info') {
+            var color = type === 'error' ? 'red' : type === 'success' ? 'green' : 'black';
+            document.getElementById('log').innerHTML += '<span style="color:' + color + ';">' + msg + '</span><br>';
+            console.log(msg);
+        }
+        
+        log('=== 开始调试GLB文件 ===', 'info');
+        
+        // 加载GLB文件
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', 'models/patient.glb', true);
+        xhr.responseType = 'arraybuffer';
+        
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                log('✓ 文件加载成功，大小: ' + xhr.response.byteLength + ' 字节', 'success');
+                
+                var buffer = new Uint8Array(xhr.response);
+                
+                // 检查文件头
+                var magic = String.fromCharCode(buffer[0], buffer[1], buffer[2], buffer[3]);
+                log('文件头 (Magic): ' + magic, 'info');
+                
+                if (magic !== 'glTF') {
+                    log('✗ 不是有效的GLB文件！', 'error');
+                    return;
+                }
+                
+                // 检查版本
+                var view = new DataView(xhr.response);
+                var version = view.getUint32(4, true);
+                var length = view.getUint32(8, true);
+                log('版本: ' + version, 'info');
+                log('总长度: ' + length + ' 字节', 'info');
+                
+                // 检查JSON块
+                var jsonLength = view.getUint32(12, true);
+                var jsonType = String.fromCharCode(buffer[16], buffer[17], buffer[18], buffer[19]);
+                log('JSON块长度: ' + jsonLength, 'info');
+                log('JSON块类型: ' + jsonType, 'info');
+                
+                // 尝试解码JSON
+                try {
+                    var jsonBytes = buffer.subarray(20, 20 + jsonLength);
+                    var jsonString = new TextDecoder('utf-8').decode(jsonBytes);
+                    log('JSON字符串前100字符: ' + jsonString.substring(0, 100), 'info');
+                    
+                    var json = JSON.parse(jsonString);
+                    log('✓ JSON解析成功', 'success');
+                    log('asset版本: ' + json.asset.version, 'info');
+                    
+                    if (json.meshes) log('网格数量: ' + json.meshes.length, 'info');
+                    if (json.materials) log('材质数量: ' + json.materials.length, 'info');
+                    if (json.nodes) log('节点数量: ' + json.nodes.length, 'info');
+                    
+                } catch (e) {
+                    log('✗ JSON解析失败: ' + e.message, 'error');
+                    
+                    // 显示原始字节
+                    log('JSON块前32字节:', 'info');
+                    var hex = '';
+                    for (var i = 20; i < Math.min(52, buffer.length); i++) {
+                        hex += buffer[i].toString(16).padStart(2, '0') + ' ';
+                    }
+                    log(hex, 'info');
+                    
+                    // 尝试显示字符串形式
+                    var str = '';
+                    for (var i = 20; i < Math.min(52, buffer.length); i++) {
+                        str += String.fromCharCode(buffer[i]);
+                    }
+                    log('JSON块前32字符: ' + str, 'info');
+                }
+                
+            } else {
+                log('✗ 文件加载失败，状态码: ' + xhr.status, 'error');
+            }
+        };
+        
+        xhr.onerror = function() {
+            log('✗ 网络请求失败', 'error');
+        };
+        
+        xhr.send();
+    </script>
+</body>
+</html>
