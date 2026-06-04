@@ -115,6 +115,11 @@ class Patient3D {
         console.log('✅ 文件下载完成，大小:', arrayBuffer.byteLength, '字节');
 
         const loader = new THREE.GLTFLoader();
+
+    // 加入 Draco 解码器支持
+    const dracoLoader = new THREE.DRACOLoader();
+    dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.150.0/examples/js/libs/draco/');
+    loader.setDRACOLoader(dracoLoader);
         loader.parse(
             arrayBuffer,
             '',
