@@ -108,48 +108,60 @@ class Patient3D {
     loadGLBModel() {
         const loader = new THREE.GLTFLoader();
         const self = this;
-        
+
         console.log('开始加载GLB模型:', this.modelPath);
-        
+
         loader.load(
             this.modelPath,
             function(gltf) {
-                console.log('GLB模型数据已加载');
+                console.log('✅ onLoad 被触发！gltf 对象:', gltf);
+                console.log('✅ gltf.scene 存在:', !!gltf.scene);
+                console.log('✅ gltf.scene 类型:', gltf.scene.type);
+                console.log('✅ gltf.scene 子对象数量:', gltf.scene.children.length);
+
                 self.patientGroup = gltf.scene;
                 
-                // 打印模型结构
-                console.log('模型场景结构:', gltf.scene);
-                
-                // 调整模型大小和位置（让坐着的患者正确显示，脸朝向镜头）
                 self.patientGroup.scale.set(2.2, 2.2, 2.2);
                 self.patientGroup.position.set(0, 0.9, 0.9);
                 self.patientGroup.rotation.set(-0.0873, 0.0873, 0.0000);
                 
-                // 启用阴影
+                // 阴影
                 self.patientGroup.traverse(function(child) {
                     if (child.isMesh) {
                         child.castShadow = true;
                         child.receiveShadow = true;
                     }
                 });
-                
+
                 self.scene.add(self.patientGroup);
-                
-                // 尝试获取身体部件引用（根据模型结构调整）
-                self.findBodyParts();
-                
-                // 创建声波效果
-                self.createSoundWaves();
-                
-                console.log('GLB模型加载成功并添加到场景');
+                console.log('✅ 模型已添加到场景');
+
+                // 安全查找部件
+                try {
+                    self.findBodyParts();
+                } catch(e) {
+                    console.error('❌ findBodyParts 出错:', e);
+                }
+
+                try {
+                    self.createSoundWaves();
+                } catch(e) {
+                    console.error('❌ createSoundWaves 出错:', e);
+                }
+
+                console.log('✅ GLB模型加载成功并添加到场景');
             },
             function(xhr) {
-                console.log('GLB模型加载进度:', (xhr.loaded / xhr.total * 100).toFixed(0) + '%');
+                // 修复进度显示：避免 total 为 0 导致 Infinity
+                if (xhr.total > 0) {
+                    console.log('GLB模型加载进度:', (xhr.loaded / xhr.total * 100).toFixed(0) + '%');
+                } else {
+                    console.log('GLB模型加载中... (已下载字节:', xhr.loaded, ')');
+                }
             },
             function(error) {
-                console.error('GLB模型加载失败:', error);
+                console.error('❌ GLB模型加载失败:', error);
                 console.error('错误详情:', error.message);
-                // 加载失败时回退到代码生成的模型
                 self.createPatient();
             }
         );
