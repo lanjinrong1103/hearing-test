@@ -105,27 +105,27 @@ class Patient3D {
     }
     
     // 加载GLB模型
-    loadGLBModel() {
+    async loadGLBModel() {
+    const self = this;
+    console.log('🔄 使用 fetch 方式加载模型');
+    try {
+        const response = await fetch(this.modelPath);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const arrayBuffer = await response.arrayBuffer();
+        console.log('✅ 文件下载完成，大小:', arrayBuffer.byteLength, '字节');
+
         const loader = new THREE.GLTFLoader();
-        const self = this;
-
-        console.log('开始加载GLB模型:', this.modelPath);
-
-        loader.load(
-            this.modelPath,
+        loader.parse(
+            arrayBuffer,
+            '',
             function(gltf) {
-                console.log('✅ onLoad 被触发！gltf 对象:', gltf);
-                console.log('✅ gltf.scene 存在:', !!gltf.scene);
-                console.log('✅ gltf.scene 类型:', gltf.scene.type);
-                console.log('✅ gltf.scene 子对象数量:', gltf.scene.children.length);
-
+                console.log('✅ parse 成功，gltf.scene:', gltf.scene);
                 self.patientGroup = gltf.scene;
-                
+
                 self.patientGroup.scale.set(2.2, 2.2, 2.2);
                 self.patientGroup.position.set(0, 0.9, 0.9);
                 self.patientGroup.rotation.set(-0.0873, 0.0873, 0.0000);
-                
-                // 阴影
+
                 self.patientGroup.traverse(function(child) {
                     if (child.isMesh) {
                         child.castShadow = true;
@@ -136,36 +136,21 @@ class Patient3D {
                 self.scene.add(self.patientGroup);
                 console.log('✅ 模型已添加到场景');
 
-                // 安全查找部件
-                try {
-                    self.findBodyParts();
-                } catch(e) {
-                    console.error('❌ findBodyParts 出错:', e);
-                }
-
-                try {
-                    self.createSoundWaves();
-                } catch(e) {
-                    console.error('❌ createSoundWaves 出错:', e);
-                }
+                try { self.findBodyParts(); } catch(e) { console.error('❌ findBodyParts 出错:', e); }
+                try { self.createSoundWaves(); } catch(e) { console.error('❌ createSoundWaves 出错:', e); }
 
                 console.log('✅ GLB模型加载成功并添加到场景');
             },
-            function(xhr) {
-                // 修复进度显示：避免 total 为 0 导致 Infinity
-                if (xhr.total > 0) {
-                    console.log('GLB模型加载进度:', (xhr.loaded / xhr.total * 100).toFixed(0) + '%');
-                } else {
-                    console.log('GLB模型加载中... (已下载字节:', xhr.loaded, ')');
-                }
-            },
             function(error) {
-                console.error('❌ GLB模型加载失败:', error);
-                console.error('错误详情:', error.message);
+                console.error('❌ parse 失败:', error);
                 self.createPatient();
             }
         );
+    } catch (error) {
+        console.error('❌ 下载失败:', error);
+        self.createPatient();
     }
+}
     
     // 查找GLB模型中的身体部件（改进版本）
     findBodyParts() {
